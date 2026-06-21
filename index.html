@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>跨校通學需求媒合平台 ｜ 交通平權・教育平權</title>
+<title>跨縣市通學需求媒合平台 ｜ 交通平權・教育平權</title>
 
 <!-- Leaflet 地圖元件（免費、開源、不需金鑰） -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -11,411 +11,397 @@
 
 <style>
   :root{
-    --bg:#0f172a; --panel:#ffffff; --ink:#0f172a; --muted:#64748b;
-    --line:#e2e8f0; --brand:#1d4ed8; --brand-soft:#eff6ff;
-    --bus:#16a34a; --stop:#f59e0b; --wait:#94a3b8;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --panel:#fff;
+    --brand:#1d4ed8; --brand-soft:#eff6ff;
+    --big:#15803d; --mid:#2563eb; --small:#f59e0b; --wait:#94a3b8;
+    --origin:#7c3aed; --dest:#dc2626;
   }
   *{box-sizing:border-box}
-  body{
-    margin:0; font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
-    color:var(--ink); background:#f1f5f9; line-height:1.6;
-  }
-  header.hero{
-    background:linear-gradient(135deg,#1e3a8a,#1d4ed8 55%,#2563eb);
-    color:#fff; padding:28px 20px 22px;
-  }
-  .hero-inner{max-width:1180px; margin:0 auto;}
-  .hero h1{margin:0 0 6px; font-size:26px; letter-spacing:1px;}
+  body{margin:0; font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; color:var(--ink); background:#f1f5f9; line-height:1.6;}
+  header.hero{background:linear-gradient(135deg,#1e3a8a,#1d4ed8 55%,#2563eb); color:#fff; padding:26px 20px 22px;}
+  .hero-inner{max-width:1200px; margin:0 auto;}
+  .hero h1{margin:0 0 6px; font-size:25px; letter-spacing:.5px;}
   .hero .tagline{font-size:15px; opacity:.92; margin:0;}
-  .hero .sub{font-size:13px; opacity:.8; margin:10px 0 0;}
-  .privacy{
-    display:inline-block; margin-top:12px; font-size:12.5px;
-    background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.35);
-    padding:5px 12px; border-radius:999px;
-  }
-  main{max-width:1180px; margin:0 auto; padding:18px 16px 60px;}
+  .hero .sub{font-size:13px; opacity:.82; margin:9px 0 0;}
+  .privacy{display:inline-block; margin-top:12px; font-size:12.5px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.35); padding:5px 12px; border-radius:999px;}
+  main{max-width:1200px; margin:0 auto; padding:18px 16px 60px;}
 
-  /* 統計卡 */
   .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:4px 0 18px;}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px;}
-  .card .num{font-size:28px; font-weight:800; line-height:1.1;}
+  .card .num{font-size:27px; font-weight:800; line-height:1.1;}
   .card .lbl{font-size:13px; color:var(--muted); margin-top:2px;}
   .card.accent .num{color:var(--brand);}
 
   .layout{display:grid; grid-template-columns:1.55fr 1fr; gap:16px;}
   .box{background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden;}
-  .box h2{margin:0; padding:14px 16px; font-size:16px; border-bottom:1px solid var(--line); background:#f8fafc;}
-  #map{height:520px; width:100%;}
-
-  /* 圖例 */
+  .box h2{margin:0; padding:14px 16px; font-size:16px; border-bottom:1px solid var(--line); background:#f8fafc; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+  .box h2 select{font-size:13px; padding:5px 8px; border:1px solid var(--line); border-radius:8px;}
+  #map{height:540px; width:100%;}
   .legend{display:flex; flex-wrap:wrap; gap:14px; padding:10px 16px; font-size:12.5px; color:var(--muted); border-top:1px solid var(--line);}
   .legend .dot{display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; vertical-align:middle;}
 
-  /* 表單 */
   .form-body{padding:14px 16px;}
   .form-body p.hint{font-size:12.5px; color:var(--muted); margin:0 0 12px;}
   label{display:block; font-size:13px; font-weight:600; margin:10px 0 4px;}
   select, input{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; font-size:14px; font-family:inherit; background:#fff;}
   .btn{display:inline-block; width:100%; margin-top:14px; padding:11px; border:0; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;}
-  .btn.primary{background:var(--brand); color:#fff;}
-  .btn.primary:hover{background:#1e40af;}
+  .btn.primary{background:var(--brand); color:#fff;} .btn.primary:hover{background:#1e40af;}
   .btn.ghost{background:#fff; color:var(--muted); border:1px solid var(--line); margin-top:8px; font-weight:600;}
-  .btn.pick{background:var(--brand-soft); color:var(--brand); border:1px dashed var(--brand); margin-top:8px;}
-  .btn.pick.active{background:var(--brand); color:#fff; border-style:solid;}
-  .pickinfo{font-size:12.5px; color:var(--bus); margin-top:6px; min-height:16px;}
+  .okmsg{font-size:12.5px; color:var(--big); margin-top:8px; min-height:16px;}
 
-  /* 表格 */
   .table-wrap{overflow-x:auto;}
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
-  th,td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap;}
+  th,td{padding:9px 12px; text-align:center; border-bottom:1px solid var(--line); white-space:nowrap;}
   th{background:#f8fafc; color:var(--muted); font-weight:600;}
-  tr:hover td{background:#f8fafc;}
-  .badge{display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:700; color:#fff;}
-  .badge.bus{background:var(--bus);}
-  .badge.stop{background:var(--stop);}
-  .badge.wait{background:var(--wait);}
-  .schoolmix{color:var(--muted); font-size:12.5px;}
-
+  td.town{text-align:left; font-weight:700;}
+  tr:hover td{background:#fafcff;}
+  td.zero{color:#cbd5e1;}
+  .tot{background:#f1f5f9; font-weight:800;}
   .section-gap{margin-top:16px;}
-  footer{max-width:1180px; margin:24px auto 0; padding:0 16px; color:var(--muted); font-size:12.5px;}
+
+  /* 司機路線卡 */
+  .routes{display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:14px 16px;}
+  .route-card{border:1px solid var(--line); border-left-width:6px; border-radius:12px; padding:14px 16px; background:#fff;}
+  .route-card.big{border-left-color:var(--big);}
+  .route-card.mid{border-left-color:var(--mid);}
+  .route-card.small{border-left-color:var(--small);}
+  .route-card.wait{border-left-color:var(--wait);}
+  .route-head{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
+  .route-title{font-size:16px; font-weight:800;}
+  .badge{display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; color:#fff;}
+  .badge.big{background:var(--big);} .badge.mid{background:var(--mid);} .badge.small{background:var(--small);} .badge.wait{background:var(--wait);}
+  .route-sub{font-size:12.5px; color:var(--muted); margin:4px 0 12px;}
+  .route-cols{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .route-col h4{margin:0 0 6px; font-size:13px; color:var(--brand);}
+  .route-col ol, .route-col ul{margin:0; padding-left:18px; font-size:13px;}
+  .route-col li{margin:3px 0;}
+  .route-col b{color:var(--ink);}
+  .stop-area{font-size:11.5px; color:var(--muted);}
+
+  footer{max-width:1200px; margin:24px auto 0; padding:0 16px; color:var(--muted); font-size:12.5px;}
   footer a{color:var(--brand);}
 
-  @media (max-width:880px){
+  .cluster-badge{display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; border-radius:50%; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);}
+  .school-pin{font-size:20px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
+
+  @media (max-width:900px){
     .stats{grid-template-columns:repeat(2,1fr);}
     .layout{grid-template-columns:1fr;}
-    #map{height:380px;}
+    .routes{grid-template-columns:1fr;}
+    #map{height:400px;}
   }
-
-  /* 地圖上的數字徽章 */
-  .cluster-badge{
-    display:flex; align-items:center; justify-content:center;
-    font-weight:800; color:#fff; border-radius:50%;
-    border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
-  }
-  .school-pin{font-size:20px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));}
 </style>
 </head>
 <body>
 
 <header class="hero">
   <div class="hero-inner">
-    <h1>🚌 跨校通學需求媒合平台</h1>
-    <p class="tagline">交通平權・教育平權｜把散落各校的「點狀需求」聚合成「面狀運量」</p>
-    <p class="sub">示範情境：花蓮非六都地區 — 沿台9線各鄉鎮學子，跨校共乘通學需求媒合</p>
-    <span class="privacy">🔒 去識別化：本平台僅蒐集「居住區域」與「就讀學校」，不蒐集姓名等個人資料</span>
+    <h1>🚌 跨縣市通學需求媒合平台</h1>
+    <p class="tagline">交通平權・教育平權｜把散落各鄉鎮的「跨縣市通學需求」聚合成「可調派的校車路線」</p>
+    <p class="sub">示範情境：<b>南投縣</b>各鄉鎮學子 → <b>嘉義</b>各地區就學，跨縣市共乘專車媒合與路線調派</p>
+    <span class="privacy">🔒 去識別化：本平台僅蒐集「居住鄉鎮」與「就讀學校／地區」，不蒐集姓名等個人資料</span>
   </div>
 </header>
 
 <main>
-  <!-- 統計卡 -->
   <section class="stats" id="stats"></section>
 
   <div class="layout">
-    <!-- 地圖 -->
     <div class="box">
-      <h2>需求分布與聚合地圖</h2>
+      <h2>
+        <span>跨縣市需求與路線地圖</span>
+        <span>路線：<select id="route-sel"></select></span>
+      </h2>
       <div id="map"></div>
       <div class="legend">
-        <span><span class="dot" style="background:var(--bus)"></span>可開幸福巴士（≥9人）</span>
-        <span><span class="dot" style="background:var(--stop)"></span>建議加開停靠站（4–8人）</span>
-        <span><span class="dot" style="background:var(--wait)"></span>需求待累積（1–3人）</span>
-        <span><span class="dot" style="background:#1d4ed8"></span>學生居住點</span>
-        <span>⭐ 學校</span>
+        <span><span class="dot" style="background:var(--origin)"></span>南投上車鄉鎮</span>
+        <span>⭐ 嘉義學校（下車點）</span>
+        <span><span class="dot" style="background:var(--big)"></span>大型校車</span>
+        <span><span class="dot" style="background:var(--mid)"></span>中型巴士</span>
+        <span><span class="dot" style="background:var(--small)"></span>幸福巴士共乘</span>
       </div>
     </div>
 
-    <!-- 新增需求表單 -->
     <div class="box">
-      <h2>➕ 登記我的通學需求</h2>
+      <h2>➕ 登記我的跨縣市通學需求</h2>
       <div class="form-body">
-        <p class="hint">評審/來賓可當場登記一筆需求，地圖與統計會即時重新聚合，體驗「資訊匯流」的效果。</p>
-        <label>居住鄉鎮</label>
+        <p class="hint">評審／來賓可當場登記一筆需求，統計表、路線與地圖會即時重新調派，體驗「跨縣市需求匯流」的效果。</p>
+        <label>居住鄉鎮（南投縣）</label>
         <select id="f-town"></select>
-
-        <button type="button" class="btn pick" id="f-pick">📍 改用地圖精準點選我家位置</button>
-        <div class="pickinfo" id="f-pickinfo"></div>
-
-        <label>就讀學校</label>
+        <label>就讀學校（嘉義）</label>
         <select id="f-school"></select>
-
         <label>希望到校時段</label>
         <select id="f-arrive">
-          <option value="07:10">07:10（第一節前）</option>
-          <option value="07:30" selected>07:30</option>
-          <option value="07:50">07:50</option>
+          <option value="07:00">07:00（跨縣市需早發車）</option>
+          <option value="07:20" selected>07:20</option>
+          <option value="07:40">07:40</option>
         </select>
-
         <button type="button" class="btn primary" id="f-submit">送出需求</button>
         <button type="button" class="btn ghost" id="f-reset">↺ 重置為示範資料</button>
+        <div class="okmsg" id="f-ok"></div>
       </div>
     </div>
   </div>
 
-  <!-- 聚落統計表 -->
+  <!-- 跨縣市交叉統計表 -->
   <div class="box section-gap">
-    <h2>聚落需求統計（跨校聚合結果）</h2>
+    <h2>跨縣市通學需求統計（南投鄉鎮 × 嘉義就讀地區）</h2>
     <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>聚落／區域</th>
-            <th>需求人數</th>
-            <th>各校分布</th>
-            <th>主要到校時段</th>
-            <th>建議方案</th>
-          </tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-      </table>
+      <table id="matrix"></table>
     </div>
+  </div>
+
+  <!-- 司機路線卡 -->
+  <div class="box section-gap">
+    <h2>建議調派路線（供司機參考：上車點 → 下車點）</h2>
+    <div class="routes" id="routes"></div>
   </div>
 
   <footer>
     <p>本網頁為提案《改善偏鄉校車問題》之概念展示原型，地圖資料來源 © OpenStreetMap 貢獻者。
-    範例資料為模擬之去識別化通學需求，僅供概念示範，非真實個資。</p>
+    範例之鄉鎮、學校與人數為模擬之去識別化資料，僅供概念示範，非真實個資。</p>
   </footer>
 </main>
 
 <script>
 /* =========================================================
-   1. 基礎資料：學校（目的地）與鄉鎮（出發地）
+   1. 基礎資料
    ========================================================= */
+// 嘉義就讀地區（下車地區）
+const AREAS = [
+  {name:'嘉義市東區', lat:23.4830, lng:120.4620},
+  {name:'嘉義市西區', lat:23.4730, lng:120.4350},
+  {name:'嘉義縣民雄', lat:23.5500, lng:120.4300},
+];
+const AREA_MAP = Object.fromEntries(AREAS.map(a=>[a.name,a]));
+
+// 嘉義學校（目的地）
 const SCHOOLS = [
-  {id:'A', name:'花蓮高中',   short:'花中', lat:23.9870, lng:121.6010},
-  {id:'B', name:'花蓮女中',   short:'花女', lat:23.9785, lng:121.6090},
-  {id:'C', name:'國立花蓮高商', short:'花商', lat:23.9755, lng:121.6060},
-  {id:'D', name:'四維高中',   short:'四維', lat:23.9930, lng:121.6035},
+  {id:'A', name:'嘉義高中',     short:'嘉中', area:'嘉義市東區', lat:23.4890, lng:120.4600},
+  {id:'B', name:'嘉義女中',     short:'嘉女', area:'嘉義市東區', lat:23.4810, lng:120.4640},
+  {id:'C', name:'國立嘉義高商', short:'嘉商', area:'嘉義市西區', lat:23.4760, lng:120.4380},
+  {id:'D', name:'國立嘉義高工', short:'嘉工', area:'嘉義市西區', lat:23.4700, lng:120.4300},
+  {id:'E', name:'協同高中（民雄）', short:'協同', area:'嘉義縣民雄', lat:23.5500, lng:120.4300},
 ];
 const SCHOOL_MAP = Object.fromEntries(SCHOOLS.map(s=>[s.id,s]));
 
-// 各鄉鎮中心點（沿台9線，由北往南），roster = 該鄉鎮各學生就讀學校
+// 南投鄉鎮（出發地）＋ 建議集合上車地標。roster = 該鄉鎮各學生就讀的嘉義學校
 const TOWNS = [
-  {name:'吉安鄉', lat:23.9670, lng:121.5700, roster:['A','A','B','C','D','A','B','C','A','D','B']},
-  {name:'壽豐鄉', lat:23.8700, lng:121.5080, roster:['A','B','C','A','B','D','A','C','B']},
-  {name:'鳳林鎮', lat:23.7450, lng:121.4520, roster:['A','B','C','D','A','B']},
-  {name:'光復鄉', lat:23.6680, lng:121.4210, roster:['A','B','C','A']},
-  {name:'豐濱鄉', lat:23.5980, lng:121.5200, roster:['A','B']},
-  {name:'瑞穗鄉', lat:23.4970, lng:121.3770, roster:['A','B','C']},
-  {name:'玉里鎮', lat:23.3370, lng:121.3160, roster:['A','B','C','D','A','B','C']},
+  {name:'草屯鎮', landmark:'草屯鎮公所',  lat:23.9740, lng:120.6790, roster:['A','B','A','C','A']},
+  {name:'埔里鎮', landmark:'埔里轉運站',  lat:23.9650, lng:120.9650, roster:['A','B','A','C','E','B']},
+  {name:'南投市', landmark:'南投轉運站',  lat:23.9100, lng:120.6850, roster:['A','B','C','A','B','D']},
+  {name:'名間鄉', landmark:'名間火車站',  lat:23.8380, lng:120.6920, roster:['A','C','A','D','B']},
+  {name:'集集鎮', landmark:'集集火車站',  lat:23.8290, lng:120.7850, roster:['A','B','E']},
+  {name:'水里鄉', landmark:'水里火車站',  lat:23.8120, lng:120.8570, roster:['A','E','C']},
+  {name:'鹿谷鄉', landmark:'鹿谷鄉公所',  lat:23.7440, lng:120.7530, roster:['A','B','C','D']},
+  {name:'竹山鎮', landmark:'竹山鎮公所',  lat:23.7570, lng:120.6720, roster:['A','A','B','C','D','A','B']},
 ];
-const ARRIVE = ['07:10','07:30','07:30','07:30','07:50','07:30','07:10','07:50','07:30'];
+const TOWN_MAP = Object.fromEntries(TOWNS.map(t=>[t.name,t]));
+const ARRIVE = ['07:00','07:20','07:20','07:40','07:20'];
 
-// 由上述資料「展開」成個別學生需求（去識別化，僅有座標/學校/時段）
 function buildSeed(){
   const seed=[]; let id=1;
-  TOWNS.forEach((t,ti)=>{
-    t.roster.forEach((sid,i)=>{
-      const k=i+1;
-      const offLat=(((k*37)%10)-5)*0.0011;   // 固定偏移，讓示範資料每次一致
-      const offLng=(((k*53)%10)-5)*0.0011;
-      seed.push({
-        id:id++, school:sid,
-        lat:+(t.lat+offLat).toFixed(5),
-        lng:+(t.lng+offLng).toFixed(5),
-        arrive:ARRIVE[(i+ti)%ARRIVE.length],
-      });
-    });
-  });
+  TOWNS.forEach((t,ti)=> t.roster.forEach((sid,i)=>{
+    seed.push({id:id++, town:t.name, school:sid, arrive:ARRIVE[(i+ti)%ARRIVE.length]});
+  }));
   return seed;
 }
 
 /* =========================================================
-   2. 資料存取（localStorage 讓當場新增的需求能保留）
+   2. 資料存取
    ========================================================= */
-const STORE_KEY='commute_demands_v1';
+const STORE_KEY='cross_county_demands_v2';
 function loadDemands(){
-  try{
-    const raw=localStorage.getItem(STORE_KEY);
-    if(raw){ const d=JSON.parse(raw); if(Array.isArray(d)&&d.length) return d; }
-  }catch(e){}
+  try{ const raw=localStorage.getItem(STORE_KEY);
+    if(raw){ const d=JSON.parse(raw); if(Array.isArray(d)&&d.length) return d; } }catch(e){}
   return buildSeed();
 }
 function saveDemands(d){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(d)); }catch(e){} }
 let demands = loadDemands();
 
 /* =========================================================
-   3. 聚合演算法（依居住點距離分群）
+   3. 聚合：把需求整理成「跨縣市路線」
+   每條路線 = 一個嘉義就讀地區；上車點 = 各南投鄉鎮；下車點 = 各校
    ========================================================= */
-function haversine(a,b){
-  const R=6371, toRad=x=>x*Math.PI/180;
-  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
-  const s=Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
-  return 2*R*Math.asin(Math.sqrt(s));
-}
-const CLUSTER_KM=6; // 6 公里內的居住需求視為同一可共乘聚落
-
-function clusterize(items){
-  const clusters=[];
-  items.forEach(p=>{
-    let target=null;
-    for(const c of clusters){ if(haversine(c.anchor,p)<=CLUSTER_KM){ target=c; break; } }
-    if(!target){ target={anchor:p, members:[]}; clusters.push(target); }
-    target.members.push(p);
+function computeRoutes(items){
+  const byArea={};
+  items.forEach(d=>{
+    const sc=SCHOOL_MAP[d.school]; const area=sc.area;
+    const r = byArea[area] || (byArea[area]={area, members:[], pickups:{}, dropoffs:{}});
+    r.members.push(d);
+    const t=TOWN_MAP[d.town];
+    (r.pickups[d.town] = r.pickups[d.town] || {town:d.town, landmark:t.landmark, lat:t.lat, lng:t.lng, count:0}).count++;
+    (r.dropoffs[d.school] = r.dropoffs[d.school] || {name:sc.name, short:sc.short, lat:sc.lat, lng:sc.lng, count:0}).count++;
   });
-  // 計算每群的中心、人數、各校分布、主要時段、建議方案
-  return clusters.map(c=>{
-    const n=c.members.length;
-    const cLat=c.members.reduce((s,m)=>s+m.lat,0)/n;
-    const cLng=c.members.reduce((s,m)=>s+m.lng,0)/n;
-    // 各校分布
-    const bySchool={};
-    c.members.forEach(m=>{ bySchool[m.school]=(bySchool[m.school]||0)+1; });
-    // 主要到校時段
-    const byTime={};
-    c.members.forEach(m=>{ byTime[m.arrive]=(byTime[m.arrive]||0)+1; });
-    const topTime=Object.entries(byTime).sort((a,b)=>b[1]-a[1])[0][0];
-    // 最近鄉鎮作為標籤
-    let label=TOWNS[0].name, best=Infinity;
-    TOWNS.forEach(t=>{ const d=haversine({lat:cLat,lng:cLng},t); if(d<best){best=d; label=t.name;} });
-    // 建議方案分級
-    let tier='wait', advice='需求待累積中';
-    if(n>=9){ tier='bus'; advice='建議開設 9 人座幸福巴士專車'; }
-    else if(n>=4){ tier='stop'; advice='建議協調客運加開停靠站'; }
-    return {label, n, cLat, cLng, bySchool, topTime, tier, advice, members:c.members};
-  }).sort((a,b)=>b.n-a.n);
+  return AREAS.filter(a=>byArea[a.name]).map(a=>{
+    const r=byArea[a.name]; const n=r.members.length;
+    const pickups=Object.values(r.pickups).sort((x,y)=>y.lat-x.lat); // 北→南，貼近往嘉義行進方向
+    const dropoffs=Object.values(r.dropoffs).sort((x,y)=>y.count-x.count);
+    let tier,advice,vehicle;
+    if(n>=20){ tier='big';   vehicle='大型校車（約45人座）'; advice='建議開設跨縣市大型校車專線'; }
+    else if(n>=8){ tier='mid'; vehicle='中型巴士（約25人座）'; advice='建議開設跨縣市中型巴士專線'; }
+    else if(n>=4){ tier='small'; vehicle='9人座幸福巴士共乘'; advice='建議媒合幸福巴士跨縣市共乘'; }
+    else { tier='wait'; vehicle='—'; advice='需求待累積中'; }
+    return {area:a.name, lat:a.lat, lng:a.lng, n, pickups, dropoffs, tier, advice, vehicle};
+  }).sort((x,y)=>y.n-x.n);
 }
 
-function schoolMixText(bySchool){
-  return Object.entries(bySchool)
-    .sort((a,b)=>b[1]-a[1])
-    .map(([sid,cnt])=>`${SCHOOL_MAP[sid].short} ${cnt}`).join('・');
+// 交叉統計：town -> area -> count
+function computeMatrix(items){
+  const m={};
+  items.forEach(d=>{ const area=SCHOOL_MAP[d.school].area;
+    (m[d.town]=m[d.town]||{})[area]=((m[d.town]||{})[area]||0)+1; });
+  return m;
 }
-const TIER_COLOR={bus:getCss('--bus'), stop:getCss('--stop'), wait:getCss('--wait')};
-function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function townTotal(items, town){ return items.filter(d=>d.town===town).length; }
+
+const TIER_COLOR={big:'#15803d', mid:'#2563eb', small:'#f59e0b', wait:'#94a3b8'};
 
 /* =========================================================
    4. 地圖
    ========================================================= */
-const map=L.map('map',{scrollWheelZoom:true}).setView([23.72,121.50],9);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom:18, attribution:'© OpenStreetMap'
-}).addTo(map);
+const map=L.map('map',{scrollWheelZoom:true}).setView([23.72,120.62],9);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18, attribution:'© OpenStreetMap'}).addTo(map);
+
+const baseLayer=L.layerGroup().addTo(map);   // 鄉鎮 + 學校固定標記
+const routeLayer=L.layerGroup().addTo(map);  // 選定路線的連線
 
 // 學校固定標記
 SCHOOLS.forEach(s=>{
-  L.marker([s.lat,s.lng],{icon:L.divIcon({
-    className:'', html:`<div class="school-pin">⭐</div>`, iconSize:[24,24], iconAnchor:[12,12]
-  })}).addTo(map).bindPopup(`<b>⭐ ${s.name}</b>`);
+  L.marker([s.lat,s.lng],{icon:L.divIcon({className:'', html:`<div class="school-pin">⭐</div>`, iconSize:[24,24], iconAnchor:[12,12]})})
+    .addTo(baseLayer).bindPopup(`<b>⭐ ${s.name}</b><br>${s.area}`);
 });
 
-let dynamicLayer=L.layerGroup().addTo(map);
+function renderBase(){
+  // 南投鄉鎮上車點（大小依該鎮總人數）
+  TOWNS.forEach(t=>{
+    const total=townTotal(demands, t.name);
+    if(total===0) return;
+    const size=Math.max(28, Math.min(50, 22+total*2.2));
+    L.marker([t.lat,t.lng],{icon:L.divIcon({className:'',
+      html:`<div class="cluster-badge" style="width:${size}px;height:${size}px;background:var(--origin);font-size:${size>40?15:13}px">${total}</div>`,
+      iconSize:[size,size], iconAnchor:[size/2,size/2]})})
+      .addTo(baseLayer)
+      .bindPopup(`<b>${t.name}</b>（共 ${total} 人跨縣市通學）<br>🚏 建議集合點：${t.landmark}`);
+  });
+}
 
-function renderMap(clusters){
-  dynamicLayer.clearLayers();
-  clusters.forEach(c=>{
-    const color=TIER_COLOR[c.tier];
-    // 聚合範圍圈
-    L.circle([c.cLat,c.cLng],{
-      radius:1500, color, weight:2, fillColor:color, fillOpacity:.12
-    }).addTo(dynamicLayer);
-    // 每位學生居住點（小藍點）
-    c.members.forEach(m=>{
-      L.circleMarker([m.lat,m.lng],{
-        radius:4, color:'#1d4ed8', weight:1, fillColor:'#3b82f6', fillOpacity:.85
-      }).addTo(dynamicLayer).bindPopup(`居住於 <b>${c.label}</b><br>就讀 ${SCHOOL_MAP[m.school].name}<br>到校 ${m.arrive}`);
-    });
-    // 中央人數徽章
-    const size=Math.max(34, Math.min(54, 26+c.n*2));
-    L.marker([c.cLat,c.cLng],{icon:L.divIcon({
-      className:'',
-      html:`<div class="cluster-badge" style="width:${size}px;height:${size}px;background:${color};font-size:${size>44?16:14}px">${c.n}</div>`,
-      iconSize:[size,size], iconAnchor:[size/2,size/2]
-    })}).addTo(dynamicLayer).bindPopup(
-      `<b>${c.label}聚落</b><br>需求 ${c.n} 人（${schoolMixText(c.bySchool)}）<br>主要到校時段 ${c.topTime}<br><b style="color:${color}">${c.advice}</b>`
-    );
+function highlightRoute(areaName){
+  routeLayer.clearLayers();
+  if(!areaName) return;
+  const routes=computeRoutes(demands);
+  const r=routes.find(x=>x.area===areaName);
+  if(!r) return;
+  const color=TIER_COLOR[r.tier];
+  // 連線：上車點（北→南）依序 → 各下車學校
+  const path=[...r.pickups.map(p=>[p.lat,p.lng]), ...r.dropoffs.map(d=>[d.lat,d.lng])];
+  L.polyline(path,{color, weight:4, opacity:.85, dashArray:'2 6'}).addTo(routeLayer);
+  // 上車點序號
+  r.pickups.forEach((p,i)=>{
+    L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',
+      html:`<div class="cluster-badge" style="width:24px;height:24px;background:${color};font-size:12px">${i+1}</div>`,
+      iconSize:[24,24], iconAnchor:[12,12]})})
+      .addTo(routeLayer).bindPopup(`上車點 ${i+1}：<b>${p.landmark}</b><br>${p.town}　${p.count} 人`);
   });
 }
 
 /* =========================================================
-   5. 統計卡 + 表格
+   5. 統計卡 / 交叉表 / 路線卡
    ========================================================= */
-function renderStats(clusters){
+function renderStats(routes){
   const total=demands.length;
-  const actionable=clusters.filter(c=>c.tier!=='wait');
-  const served=actionable.reduce((s,c)=>s+c.n,0);
-  const townCount=new Set(clusters.map(c=>c.label)).size;
+  const actionable=routes.filter(r=>r.tier!=='wait');
+  const served=actionable.reduce((s,r)=>s+r.n,0);
+  const townCount=new Set(demands.map(d=>d.town)).size;
   const cards=[
-    {num:total, lbl:'登記通學需求（人）'},
-    {num:actionable.length, lbl:'可立即媒合路線', accent:true},
+    {num:total, lbl:'跨縣市通學需求（人）'},
+    {num:actionable.length, lbl:'可調派跨縣市路線', accent:true},
     {num:served, lbl:'可服務學生數（人）', accent:true},
-    {num:townCount, lbl:'涵蓋鄉鎮聚落'},
+    {num:townCount, lbl:'涵蓋南投鄉鎮'},
   ];
-  document.getElementById('stats').innerHTML = cards.map(c=>
-    `<div class="card ${c.accent?'accent':''}"><div class="num">${c.num}</div><div class="lbl">${c.lbl}</div></div>`
-  ).join('');
+  document.getElementById('stats').innerHTML=cards.map(c=>
+    `<div class="card ${c.accent?'accent':''}"><div class="num">${c.num}</div><div class="lbl">${c.lbl}</div></div>`).join('');
 }
 
-function renderTable(clusters){
-  document.getElementById('table-body').innerHTML = clusters.map(c=>`
-    <tr>
-      <td><b>${c.label}</b></td>
-      <td>${c.n} 人</td>
-      <td class="schoolmix">${schoolMixText(c.bySchool)}</td>
-      <td>${c.topTime}</td>
-      <td><span class="badge ${c.tier}">${c.advice}</span></td>
-    </tr>`).join('');
+function renderMatrix(){
+  const m=computeMatrix(demands);
+  const rowsTowns=TOWNS.filter(t=>m[t.name]); // 只列有需求的鄉鎮
+  let head=`<thead><tr><th class="town" style="text-align:left">南投鄉鎮 ＼ 嘉義地區</th>`+
+    AREAS.map(a=>`<th>${a.name}</th>`).join('')+`<th class="tot">小計</th></tr></thead>`;
+  const colTot={}; let grand=0;
+  let body='<tbody>';
+  rowsTowns.forEach(t=>{
+    let rowTot=0;
+    body+=`<tr><td class="town">${t.name}<br><span class="stop-area">🚏 ${t.landmark}</span></td>`;
+    AREAS.forEach(a=>{
+      const v=(m[t.name]&&m[t.name][a.name])||0; rowTot+=v; colTot[a.name]=(colTot[a.name]||0)+v;
+      body+=`<td class="${v?'':'zero'}">${v||'·'}</td>`;
+    });
+    grand+=rowTot;
+    body+=`<td class="tot">${rowTot}</td></tr>`;
+  });
+  body+=`<tr class="tot"><td class="town" style="text-align:left">小計</td>`+
+    AREAS.map(a=>`<td>${colTot[a.name]||0}</td>`).join('')+`<td>${grand}</td></tr>`;
+  body+='</tbody>';
+  document.getElementById('matrix').innerHTML=head+body;
+}
+
+function renderRoutes(routes){
+  document.getElementById('routes').innerHTML=routes.map(r=>`
+    <div class="route-card ${r.tier}">
+      <div class="route-head">
+        <span class="route-title">南投 → ${r.area} 線</span>
+        <span class="badge ${r.tier}">${r.vehicle}</span>
+      </div>
+      <div class="route-sub">共 ${r.n} 名學生 ｜ ${r.advice}</div>
+      <div class="route-cols">
+        <div class="route-col">
+          <h4>🚏 上車點（依路線由北往南）</h4>
+          <ol>${r.pickups.map(p=>`<li>${p.landmark} <b>${p.count}</b> 人<br><span class="stop-area">${p.town}</span></li>`).join('')}</ol>
+        </div>
+        <div class="route-col">
+          <h4>🏫 下車點</h4>
+          <ul>${r.dropoffs.map(d=>`<li>${d.name} <b>${d.count}</b> 人</li>`).join('')}</ul>
+        </div>
+      </div>
+    </div>`).join('');
 }
 
 /* =========================================================
-   6. 重新整理整個畫面
+   6. 重新整理
    ========================================================= */
 function refresh(){
-  const clusters=clusterize(demands);
-  renderStats(clusters);
-  renderMap(clusters);
-  renderTable(clusters);
+  const routes=computeRoutes(demands);
+  renderStats(routes);
+  baseLayer.clearLayers();
+  SCHOOLS.forEach(s=> L.marker([s.lat,s.lng],{icon:L.divIcon({className:'', html:`<div class="school-pin">⭐</div>`, iconSize:[24,24], iconAnchor:[12,12]})})
+    .addTo(baseLayer).bindPopup(`<b>⭐ ${s.name}</b><br>${s.area}`));
+  renderBase();
+  renderMatrix();
+  renderRoutes(routes);
+  // 更新路線選單
+  const sel=document.getElementById('route-sel');
+  const cur=sel.value;
+  sel.innerHTML=`<option value="">全部路線</option>`+routes.map(r=>`<option value="${r.area}">南投 → ${r.area}（${r.n}人）</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  highlightRoute(sel.value);
 }
 
 /* =========================================================
-   7. 表單互動
+   7. 互動
    ========================================================= */
 const townSel=document.getElementById('f-town');
-TOWNS.forEach((t,i)=> townSel.add(new Option(t.name, i)));
+TOWNS.forEach((t,i)=> townSel.add(new Option(`${t.name}（${t.landmark}）`, t.name)));
 const schoolSel=document.getElementById('f-school');
-SCHOOLS.forEach(s=> schoolSel.add(new Option(s.name, s.id)));
+SCHOOLS.forEach(s=> schoolSel.add(new Option(`${s.name}（${s.area}）`, s.id)));
 
-let pickMode=false, pickedLatLng=null, pickMarker=null;
-const pickBtn=document.getElementById('f-pick');
-const pickInfo=document.getElementById('f-pickinfo');
-
-pickBtn.addEventListener('click',()=>{
-  pickMode=!pickMode;
-  pickBtn.classList.toggle('active',pickMode);
-  pickBtn.textContent = pickMode ? '✓ 請在地圖上點一下你家位置…（再按可取消）' : '📍 改用地圖精準點選我家位置';
-  if(!pickMode){ clearPick(); }
-});
-function clearPick(){
-  pickedLatLng=null; pickInfo.textContent='';
-  if(pickMarker){ dynamicLayer.removeLayer(pickMarker); pickMarker=null; }
-}
-map.on('click',e=>{
-  if(!pickMode) return;
-  pickedLatLng={lat:+e.latlng.lat.toFixed(5), lng:+e.latlng.lng.toFixed(5)};
-  if(pickMarker) map.removeLayer(pickMarker);
-  pickMarker=L.marker([pickedLatLng.lat,pickedLatLng.lng]).addTo(map);
-  pickInfo.textContent=`已選定位置：${pickedLatLng.lat}, ${pickedLatLng.lng}`;
-});
+document.getElementById('route-sel').addEventListener('change', e=> highlightRoute(e.target.value));
 
 document.getElementById('f-submit').addEventListener('click',()=>{
-  const school=schoolSel.value;
-  const arrive=document.getElementById('f-arrive').value;
-  let lat,lng;
-  if(pickedLatLng){
-    lat=pickedLatLng.lat; lng=pickedLatLng.lng;
-  }else{
-    const t=TOWNS[+townSel.value];
-    lat=+(t.lat+(Math.random()-0.5)*0.01).toFixed(5);
-    lng=+(t.lng+(Math.random()-0.5)*0.01).toFixed(5);
-  }
   const id=(demands.reduce((m,d)=>Math.max(m,d.id),0))+1;
-  demands.push({id, school, lat, lng, arrive});
+  demands.push({id, town:townSel.value, school:schoolSel.value, arrive:document.getElementById('f-arrive').value});
   saveDemands(demands);
-  // 收尾
-  if(pickMarker){ map.removeLayer(pickMarker); pickMarker=null; }
-  pickMode=false; pickedLatLng=null;
-  pickBtn.classList.remove('active');
-  pickBtn.textContent='📍 改用地圖精準點選我家位置';
-  pickInfo.textContent='✓ 已新增一筆需求，地圖與統計已重新聚合！';
+  document.getElementById('f-ok').textContent='✓ 已新增一筆需求，統計表與路線已即時重新調派！';
   refresh();
 });
 
@@ -423,7 +409,7 @@ document.getElementById('f-reset').addEventListener('click',()=>{
   if(!confirm('確定要清除所有當場新增的資料，回到原始示範狀態嗎？')) return;
   localStorage.removeItem(STORE_KEY);
   demands=buildSeed();
-  clearPick();
+  document.getElementById('f-ok').textContent='';
   refresh();
 });
 
