@@ -95,8 +95,8 @@
   "resCounty": "雲林縣",
   "resTown": "虎尾鎮",
   "resVillage": "新興里",
-  "lat": 23.70762,
-  "lng": 120.45099,
+  "lat": 23.70676,
+  "lng": 120.44067,
   "school": "國立嘉義高工",
   "schoolCounty": "嘉義市",
   "schoolLat": 23.47159,
@@ -466,5 +466,31 @@
   "schoolLat": 23.71232,
   "schoolLng": 120.54556,
   "arrive": "07:00"
+ },
+ {
+  "id": 37,
+  "resCounty": "彰化縣",
+  "resTown": "員林市",
+  "resVillage": "東和里",
+  "lat": 23.96875,
+  "lng": 120.57453,
+  "school": "市立臺中一中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.15031,
+  "schoolLng": 120.68656,
+  "arrive": "07:00"
+ },
+ {
+  "id": 38,
+  "resCounty": "彰化縣",
+  "resTown": "員林市",
+  "resVillage": "民生里",
+  "lat": 23.94875,
+  "lng": 120.56653,
+  "school": "市立臺中女中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.13611,
+  "schoolLng": 120.67723,
+  "arrive": "07:20"
  }
 ]

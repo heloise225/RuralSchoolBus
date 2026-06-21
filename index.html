@@ -61,6 +61,7 @@
   .card.accent .num{color:var(--brand-dark);}
   .card.km{background:linear-gradient(135deg,var(--brand-soft),var(--earth-soft));}
   .card.km .num{color:var(--earth);}
+  .card.rv .num{color:#2b88b8;}
 
   .layout{display:grid; grid-template-columns:1.55fr 1fr; gap:16px;}
   .box{background:var(--panel); border:1px solid var(--line); border-radius:22px; overflow:hidden; box-shadow:var(--shadow);}
@@ -118,6 +119,10 @@
   .transfer{font-size:12.5px; background:#fff3e3; border:1px solid #f6d3a8; color:#9a4a0e; border-radius:13px; padding:9px 11px; margin:0 0 10px;}
   .combined{font-size:12.5px; background:var(--earth-soft); border:1px solid #e7d3bf; color:var(--earth); border-radius:13px; padding:9px 11px; margin:0 0 10px;}
   .route-card.combined-card{border-left-color:var(--origin);}
+  .review{font-size:12.5px; background:#eef6fb; border:1px solid #cfe6f3; color:#1d5b78; border-radius:13px; padding:9px 11px; margin:0 0 10px;}
+  .review ul{margin:6px 0 0; padding-left:18px;} .review li{margin:2px 0;}
+  .badge.review-badge{background:#2b88b8;}
+  .review-pin{font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4)); animation:busbob 1.3s ease-in-out infinite;}
 
   footer{max-width:1200px; margin:22px auto 0; padding:0 16px 12px; color:var(--muted); font-size:12.5px;}
   .footer-card{background:var(--leaf-soft); border:1px solid #dcead0; border-radius:22px; padding:20px 24px; display:grid; grid-template-columns:1.7fr 1fr 1.1fr; gap:20px;}
@@ -246,6 +251,7 @@
         <span><span class="dot" style="background:var(--mid)"></span>中型巴士</span>
         <span><span class="dot" style="background:var(--small)"></span>幸福巴士共乘</span>
         <span>━ 真實道路路線（OSRM）</span>
+        <span>🔍 順路加載・請真人審核</span>
       </div>
     </div>
 
@@ -469,7 +475,8 @@ function buildRoute(members, combined){
     : `${townsU.slice(0,3).join('、')}${townsU.length>3?'等':''} → ${destCounties[0]}`;
   return {id:`r${Math.round(oC.lat*100)}_${Math.round(oC.lng*100)}_${Math.round(destC.lat*100)}_${combined?'c':'s'}`,
     combined:!!combined, destCounty:destCounties[0], destCounties, destC, oC, n,
-    pickups, dropoffs, tier, advice, vehicle, originCounties, targetArriveMin, title};
+    pickups, dropoffs, tier, advice, vehicle, originCounties, targetArriveMin, title,
+    members, reviewPickups:[]};
 }
 
 function computeRoutes(items){
@@ -488,6 +495,39 @@ function computeRoutes(items){
     routes.push(buildRoute(oc.members, oc.members.length>=MIN_VIABLE && multiDest));
   });
   return routes.sort((a,b)=>b.n-a.n);
+}
+
+// 點到路線（OSRM 折線頂點）的最短距離（取樣加速）
+function minDistToPath(pt, pathLL){
+  let best=Infinity; const step=Math.max(1, Math.floor(pathLL.length/160));
+  for(let i=0;i<pathLL.length;i+=step){ const d=haversine(pt, pathLL[i]); if(d<best) best=d; }
+  return best;
+}
+const DETOUR_KM=8;   // 路線經過家門口 8km 內 → 可評估順路中途接送（繞路較多，標記請真人審核）
+
+// 把仍無法成線的零星學生，嘗試「順路」掛到會經過他家與學校的既有路線上（標記請真人審核）
+function attachReviewPickups(routes){
+  const hosts=routes.filter(r=>r.tier!=='wait' && r.osrm && r.osrm.geometry);
+  if(!hosts.length) return routes;
+  const hostPaths=hosts.map(r=>r.osrm.geometry.coordinates.map(c=>({lat:c[1],lng:c[0]})));
+  hosts.forEach(h=>h.reviewPickups=[]);
+  const survivors=[];
+  routes.filter(r=>r.tier==='wait').forEach(wr=>{
+    (wr.members||[]).forEach(m=>{
+      let best=null, bs=Infinity;
+      hosts.forEach((h,i)=>{
+        const dHome=minDistToPath({lat:m.lat,lng:m.lng}, hostPaths[i]);
+        const dSchool=minDistToPath({lat:m.schoolLat,lng:m.schoolLng}, hostPaths[i]);
+        if(dHome<=DETOUR_KM && dSchool<=DETOUR_KM && (dHome+dSchool)<bs){ bs=dHome+dSchool; best=h; best._dHome=dHome; }
+      });
+      if(best){ best.reviewPickups.push({...m, detourKm:+minDistToPath({lat:m.lat,lng:m.lng}, hostPaths[hosts.indexOf(best)]).toFixed(1)}); best.review=true; }
+      else survivors.push(m);
+    });
+  });
+  // 仍沒被接走的，重建為「待累積」路線
+  const rebuilt=[];
+  clusterPoints(survivors, m=>({lat:m.lat,lng:m.lng}), COMBINE_KM).forEach(oc=> rebuilt.push(buildRoute(oc.members, false)));
+  return [...routes.filter(r=>r.tier!=='wait'), ...rebuilt].sort((a,b)=>b.n-a.n);
 }
 
 // 交叉統計：居住鄉鎮(含縣市) × 學校縣市
@@ -631,6 +671,13 @@ function drawRoutes(routes, fit){
         .addTo(routeLayer).bindPopup(`<b>🔄 建議轉乘點（中繼）</b><br>${r.title}<br>跨 ${r.countySpan} 縣市，建議於此分段轉乘`);
       bounds.push([r.transfer.lat,r.transfer.lng]);
     }
+    // 順路加載（請真人審核）的學生家
+    (r.reviewPickups||[]).forEach(p=>{
+      L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',
+        html:`<div class="review-pin">🔍</div>`,iconSize:[24,24],iconAnchor:[12,12]})})
+        .addTo(routeLayer).bindPopup(`<b>🔍 順路加載・請真人審核</b><br>${p.resCounty}${p.resTown}${p.resVillage} → ${p.school}<br>距本線路徑約 ${p.detourKm} km，可評估中途接送`);
+      bounds.push([p.lat,p.lng]);
+    });
   });
   if(fit&&bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 }
@@ -652,15 +699,17 @@ function renderStats(routes){
   const served=actionable.reduce((s,r)=>s+r.n,0);
   const townCount=new Set(demands.map(d=>`${d.resCounty}${d.resTown}`)).size;
   const totalKm=actionable.reduce((s,r)=>s+(r.distanceKm||0),0);
+  const reviewCount=routes.reduce((s,r)=>s+((r.reviewPickups&&r.reviewPickups.length)||0),0);
   const cards=[
     {num:total, lbl:'跨縣市通學需求（人）'},
     {num:actionable.length, lbl:'可調派跨縣市路線', accent:true},
     {num:served, lbl:'可服務學生數（人）', accent:true},
     {num:totalKm?Math.round(totalKm):'—', lbl:'校車路線總里程（km）', km:true},
+    {num:reviewCount, lbl:'順路待真人審核（人）', review:true},
     {num:townCount, lbl:'涵蓋居住鄉鎮'},
   ];
   document.getElementById('stats').innerHTML=cards.map(c=>
-    `<div class="card ${c.accent?'accent':''}${c.km?' km':''}"><div class="num">${c.num}</div><div class="lbl">${c.lbl}</div></div>`).join('');
+    `<div class="card ${c.accent?'accent':''}${c.km?' km':''}${c.review?' rv':''}"><div class="num">${c.num}</div><div class="lbl">${c.lbl}</div></div>`).join('');
 }
 function renderMatrix(){
   const {rows,cols}=computeMatrix(demands);
@@ -689,6 +738,10 @@ function renderRoutes(routes){
     const transfer = r.needsTransfer
       ? `<div class="transfer">🔄 <b>建議分段轉乘</b>：本線跨越 ${r.countySpan} 個縣市${r.distanceKm!=null?`、全程約 ${r.distanceKm.toFixed(0)} km`:''}，建議學生先由社區接駁至中繼轉乘點，再搭幹線車前往學校（地圖上 🔄 為建議轉乘位置）。</div>`
       : '';
+    const review = (r.reviewPickups&&r.reviewPickups.length)
+      ? `<div class="review">🔍 <b>順路加載・請真人審核</b>：本線路徑會經過下列原本無法成線學生的住家附近，可評估中途接送（需專人確認繞路距離與安全）：
+           <ul>${r.reviewPickups.map(p=>`<li>${p.resCounty}${p.resTown}${p.resVillage} → ${p.school}　<span class="stop-area">距路線約 ${p.detourKm} km</span></li>`).join('')}</ul></div>`
+      : '';
     const dropList = r.dropoffs.map((d,j)=>
       `<li>${r.combined?`<b>第${j+1}站</b> `:''}${d.name}（${d.county}）<b>${d.count}</b> 人${r.dropTimes?` <span class="stop-area">🕐 ${r.dropTimes[j].time} 抵達</span>`:''}</li>`).join('');
     const schedule = r.timetable
@@ -701,11 +754,13 @@ function renderRoutes(routes){
       <div class="route-head">
         <span class="route-title">${r.title} 線</span>
         <span class="badge ${r.tier}">${r.vehicle}</span>
+        ${r.reviewPickups&&r.reviewPickups.length?`<span class="badge review-badge">🔍 ${r.reviewPickups.length} 待審核</span>`:''}
       </div>
-      <div class="route-sub">共 ${r.n} 名學生 ｜ ${r.advice}</div>
+      <div class="route-sub">共 ${r.n} 名學生${r.reviewPickups&&r.reviewPickups.length?`（＋${r.reviewPickups.length} 順路待審核）`:''} ｜ ${r.advice}</div>
       <div class="route-meta">${meta}</div>
       ${combinedNote}
       ${transfer}
+      ${review}
       <div class="route-cols">
         <div class="route-col">
           <h4>🚏 上車點（依路線由遠到近）</h4>
@@ -778,8 +833,9 @@ function setupPick(){
 let currentRoutes=[];
 async function refresh(){
   currentRoutes=computeRoutes(demands);
-  document.getElementById('routes').innerHTML='<p style="padding:16px;color:#64748b">路線規劃中（計算真實道路與抵達時間）…</p>';
+  document.getElementById('routes').innerHTML='<p style="padding:16px;color:#8a7765">路線規劃中（計算真實道路與抵達時間）…</p>';
   await enrichRoutes(currentRoutes);
+  currentRoutes=attachReviewPickups(currentRoutes);   // 順路接送（請真人審核）
   renderStats(currentRoutes);
   renderBase(currentRoutes);
   renderMatrix();
