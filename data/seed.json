@@ -349,5 +349,70 @@
   "schoolLat": 24.07316,
   "schoolLng": 120.55144,
   "arrive": "07:20"
+ },
+ {
+  "id": 28,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "振興里",
+  "lat": 23.78798,
+  "lng": 120.46201,
+  "school": "市立臺中一中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.15031,
+  "schoolLng": 120.68656,
+  "arrive": "07:40"
+ },
+ {
+  "id": 29,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "大園里",
+  "lat": 23.79298,
+  "lng": 120.47001,
+  "school": "市立臺中二中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.15347,
+  "schoolLng": 120.67448,
+  "arrive": "07:20"
+ },
+ {
+  "id": 30,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "廣福里",
+  "lat": 23.79798,
+  "lng": 120.46201,
+  "school": "市立臺中女中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.13611,
+  "schoolLng": 120.67723,
+  "arrive": "07:00"
+ },
+ {
+  "id": 31,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "正興里",
+  "lat": 23.80298,
+  "lng": 120.47001,
+  "school": "市立臺中一中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.15031,
+  "schoolLng": 120.68656,
+  "arrive": "07:00"
+ },
+ {
+  "id": 32,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "永安里",
+  "lat": 23.80798,
+  "lng": 120.46201,
+  "school": "市立臺中二中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.15347,
+  "schoolLng": 120.67448,
+  "arrive": "07:20"
  }
 ]

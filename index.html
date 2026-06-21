@@ -82,6 +82,7 @@
   .route-col li{margin:3px 0;}
   .stop-area{font-size:11.5px; color:var(--muted);}
   .far{color:var(--warn); font-weight:700;}
+  .transfer{font-size:12.5px; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:9px; padding:8px 10px; margin:0 0 10px;}
 
   footer{max-width:1200px; margin:24px auto 0; padding:0 16px; color:var(--muted); font-size:12.5px;}
   footer a{color:var(--brand);}
@@ -127,7 +128,7 @@
     <div class="box">
       <h2>
         <span>跨縣市需求與真實路線地圖</span>
-        <span>路線：<select id="route-sel"></select></span>
+        <span>選學校看路線：<select id="route-sel"></select></span>
       </h2>
       <div id="map"></div>
       <div class="legend">
@@ -192,6 +193,12 @@
    工具：地理編碼（Nominatim）＋ 道路路由（OSRM）＋ 快取
    ========================================================= */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const hm2min=s=>{ const [h,m]=s.split(':').map(Number); return h*60+m; };
+const min2hm=v=>{ v=Math.round(v); v=((v%1440)+1440)%1440; return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0'); };
+async function fetchT(url, opts={}, ms=9000){
+  const ctl=new AbortController(); const id=setTimeout(()=>ctl.abort(), ms);
+  try{ return await fetch(url,{...opts, signal:ctl.signal}); } finally{ clearTimeout(id); }
+}
 function gcCache(){ try{return JSON.parse(localStorage.getItem('geocache_v3')||'{}');}catch(e){return {};} }
 function gcSave(c){ try{localStorage.setItem('geocache_v3', JSON.stringify(c));}catch(e){} }
 
@@ -200,7 +207,7 @@ async function geocode(query){
   if(cache[query]) return cache[query];
   try{
     const url=`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q=${encodeURIComponent(query)}`;
-    const r=await fetch(url,{headers:{'Accept':'application/json'}});
+    const r=await fetchT(url,{headers:{'Accept':'application/json'}});
     const j=await r.json();
     if(j&&j[0]){ const c={lat:+(+j[0].lat).toFixed(5), lng:+(+j[0].lon).toFixed(5)}; cache[query]=c; gcSave(cache); return c; }
   }catch(e){}
@@ -215,7 +222,7 @@ async function osrmRoute(coords){
   try{
     const path=coords.map(c=>`${c.lng},${c.lat}`).join(';');
     const url=`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson`;
-    const r=await fetch(url); const j=await r.json();
+    const r=await fetchT(url); const j=await r.json();
     if(j.code==='Ok'&&j.routes&&j.routes[0]) return j.routes[0];
   }catch(e){}
   return null;
@@ -229,7 +236,7 @@ function haversine(a,b){ const R=6371,t=x=>x*Math.PI/180;
    資料載入
    ========================================================= */
 let VILLAGES={}, SCHOOLS=[], SCHOOL_COUNTIES=[], demands=[];
-const STORE_KEY='cross_county_demands_v3';
+const STORE_KEY='cross_county_demands_v4';
 const ARRIVE=['07:00','07:20','07:20','07:40','07:20'];
 const TIER_COLOR={big:'#15803d', mid:'#2563eb', small:'#f59e0b', wait:'#94a3b8'};
 
@@ -330,8 +337,10 @@ function computeRoutes(items){
       else if(n>=4){ tier='small'; vehicle='9人座幸福巴士共乘'; advice='建議媒合幸福巴士跨縣市共乘'; }
       else { tier='wait'; vehicle='—'; advice='需求待累積中'; }
       const oC=centroid(members, m=>({lat:m.lat,lng:m.lng}));
+      const originCounties=[...new Set(members.map(m=>m.resCounty))];
+      const targetArriveMin=Math.min(...members.map(m=>hm2min(m.arrive)));
       routes.push({id:`r${Math.round(oC.lat*100)}_${Math.round(oC.lng*100)}_${Math.round(destC.lat*100)}`,
-        destCounty, destC, n, pickups, dropoffs, tier, advice, vehicle,
+        destCounty, destC, n, pickups, dropoffs, tier, advice, vehicle, originCounties, targetArriveMin,
         title:`${townsU.slice(0,3).join('、')}${townsU.length>3?'等':''} → ${destCounty}`});
     });
   });
@@ -373,28 +382,71 @@ function renderBase(routes){
       .addTo(baseLayer).bindPopup(`<b>${p.county}${p.label}</b>（${p.count} 人）<br>🚏 集合上車點<br>家到集合點最遠約 ${p.maxFar.toFixed(1)} km`);
   }));
 }
-async function highlightRoute(routeId, routes){
+// 為每條路線計算真實道路（OSRM）：幾何、里程、時間、到校時刻表、是否需轉乘
+async function enrichRoutes(routes){
+  await Promise.all(routes.map(async r=>{
+    const way=[...r.pickups.map(p=>({lat:p.lat,lng:p.lng})), ...r.dropoffs.map(d=>({lat:d.lat,lng:d.lng}))];
+    const data=await osrmRoute(way);
+    r.osrm=data;
+    const span=new Set([...r.originCounties, r.destCounty]).size;
+    r.countySpan=span;
+    if(data){
+      r.distanceKm=data.distance/1000;
+      r.durationMin=data.duration/60;
+      const legs=(data.legs||[]).map(l=>l.duration);
+      const cum=[0]; legs.forEach(d=>cum.push(cum[cum.length-1]+d));
+      const firstDropIdx=r.pickups.length;             // 第一個下車點的航點索引
+      const departMin=r.targetArriveMin-(cum[firstDropIdx]||0)/60;
+      r.departTime=min2hm(departMin);
+      r.schoolArrive=min2hm(r.targetArriveMin);
+      r.timetable=r.pickups.map((p,i)=>({label:`${p.county}${p.label}`, time:min2hm(departMin+(cum[i]||0)/60)}));
+      // 轉乘：跨 ≥3 縣市，或全程 >50km
+      r.needsTransfer=(r.distanceKm>50)||span>=3;
+      if(r.needsTransfer && data.geometry && data.geometry.coordinates && data.geometry.coordinates.length){
+        const cs=data.geometry.coordinates; const mid=cs[Math.floor(cs.length/2)];
+        r.transfer={lat:mid[1], lng:mid[0]};
+      }
+    }else{
+      r.needsTransfer=span>=3;
+    }
+  }));
+}
+
+// 在地圖上畫出指定路線（使用已算好的 OSRM 幾何）
+function drawRoutes(routes, fit){
   routeLayer.clearLayers();
-  if(!routeId) return;
-  const r=routes.find(x=>x.id===routeId); if(!r) return;
-  const color=TIER_COLOR[r.tier];
-  // 路徑點：上車聚落(遠→近) → 各下車學校
-  const way=[...r.pickups.map(p=>({lat:p.lat,lng:p.lng})), ...r.dropoffs.map(d=>({lat:d.lat,lng:d.lng}))];
-  const route=await osrmRoute(way);
-  if(route&&route.geometry){
-    L.geoJSON(route.geometry,{style:{color, weight:5, opacity:.85}}).addTo(routeLayer);
-  }else{
-    L.polyline(way.map(c=>[c.lat,c.lng]),{color,weight:4,opacity:.7,dashArray:'4 6'}).addTo(routeLayer);
-  }
-  r.pickups.forEach((p,i)=>{
-    L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',
-      html:`<div class="cluster-badge" style="width:24px;height:24px;background:${color};font-size:12px">${i+1}</div>`,
-      iconSize:[24,24],iconAnchor:[12,12]})})
-      .addTo(routeLayer).bindPopup(`上車 ${i+1}：<b>${p.county}${p.label}</b>　${p.count} 人`);
+  const bounds=[];
+  routes.forEach(r=>{
+    const color=TIER_COLOR[r.tier];
+    if(r.osrm&&r.osrm.geometry){
+      L.geoJSON(r.osrm.geometry,{style:{color, weight:5, opacity:.85}}).addTo(routeLayer);
+      r.osrm.geometry.coordinates.forEach(c=>bounds.push([c[1],c[0]]));
+    }else{
+      const way=[...r.pickups.map(p=>[p.lat,p.lng]), ...r.dropoffs.map(d=>[d.lat,d.lng])];
+      L.polyline(way,{color, weight:4, opacity:.7, dashArray:'4 6'}).addTo(routeLayer);
+      way.forEach(c=>bounds.push(c));
+    }
+    r.pickups.forEach((p,i)=>{
+      L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',
+        html:`<div class="cluster-badge" style="width:24px;height:24px;background:${color};font-size:12px">${i+1}</div>`,
+        iconSize:[24,24],iconAnchor:[12,12]})})
+        .addTo(routeLayer).bindPopup(`上車 ${i+1}：<b>${p.county}${p.label}</b>　${p.count} 人${r.timetable?`<br>🕐 ${r.timetable[i].time} 發車`:''}`);
+    });
+    if(r.transfer){
+      L.marker([r.transfer.lat,r.transfer.lng],{icon:L.divIcon({className:'',
+        html:`<div style="font-size:22px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🔄</div>`,iconSize:[26,26],iconAnchor:[13,13]})})
+        .addTo(routeLayer).bindPopup(`<b>🔄 建議轉乘點（中繼）</b><br>${r.title}<br>跨 ${r.countySpan} 縣市，建議於此分段轉乘`);
+      bounds.push([r.transfer.lat,r.transfer.lng]);
+    }
   });
-  // 縮放到路線範圍
-  const all=[...way.map(c=>[c.lat,c.lng])];
-  if(all.length) map.fitBounds(all,{padding:[40,40]});
+  if(fit&&bounds.length) map.fitBounds(bounds,{padding:[40,40]});
+}
+
+// 路線選單：依「有需求的學校」選 → 高亮服務該校的路線
+function onRouteSel(val){
+  if(!val){ drawRoutes(currentRoutes, false); return; }
+  const rs=currentRoutes.filter(r=>r.dropoffs.some(d=>d.name===val));
+  drawRoutes(rs, true);
 }
 
 /* =========================================================
@@ -431,14 +483,26 @@ function renderMatrix(){
   document.getElementById('matrix').innerHTML=head+body;
 }
 function renderRoutes(routes){
-  document.getElementById('routes').innerHTML=routes.map(r=>`
-    <div class="route-card ${r.tier}">
+  document.getElementById('routes').innerHTML=routes.map(r=>{
+    const meta = (r.distanceKm!=null)
+      ? `🛣️ 全程約 ${r.distanceKm.toFixed(1)} km・約 ${Math.round(r.durationMin)} 分鐘（依真實道路）`
+      : '（道路里程暫不可用，下方為直線估計）';
+    const transfer = r.needsTransfer
+      ? `<div class="transfer">🔄 <b>建議分段轉乘</b>：本線跨越 ${r.countySpan} 個縣市${r.distanceKm!=null?`、全程約 ${r.distanceKm.toFixed(0)} km`:''}，建議學生先由社區接駁至中繼轉乘點，再搭幹線車前往學校（地圖上 🔄 為建議轉乘位置）。</div>`
+      : '';
+    const timetable = r.timetable
+      ? `<div class="route-col"><h4>🕐 預計時刻表（目標到校 ${r.schoolArrive}）</h4>
+           <ol>${r.timetable.map(t=>`<li>${t.time}　${t.label} 上車</li>`).join('')}
+           <li><b>${r.schoolArrive}　抵達 ${r.dropoffs[0].name}（下車）</b></li></ol></div>`
+      : `<div class="route-col"><h4>🕐 預計時刻表</h4><p class="stop-area">道路時間暫不可用</p></div>`;
+    return `<div class="route-card ${r.tier}">
       <div class="route-head">
         <span class="route-title">${r.title} 線</span>
         <span class="badge ${r.tier}">${r.vehicle}</span>
       </div>
       <div class="route-sub">共 ${r.n} 名學生 ｜ ${r.advice}</div>
-      <div class="route-meta" id="meta-${r.id}">道路里程計算中…</div>
+      <div class="route-meta">${meta}</div>
+      ${transfer}
       <div class="route-cols">
         <div class="route-col">
           <h4>🚏 上車點（依路線由遠到近）</h4>
@@ -449,14 +513,12 @@ function renderRoutes(routes){
           <ul>${r.dropoffs.map(d=>`<li>${d.name} <b>${d.count}</b> 人</li>`).join('')}</ul>
         </div>
       </div>
-    </div>`).join('');
-  // 非同步補上每條路線的真實道路里程／時間
-  routes.forEach(async r=>{
-    const way=[...r.pickups.map(p=>({lat:p.lat,lng:p.lng})), ...r.dropoffs.map(d=>({lat:d.lat,lng:d.lng}))];
-    const rt=await osrmRoute(way);
-    const el=document.getElementById('meta-'+r.id);
-    if(el){ el.textContent= rt ? `🛣️ 全程約 ${(rt.distance/1000).toFixed(1)} km・約 ${Math.round(rt.duration/60)} 分鐘（依真實道路）` : '（道路里程暫不可用）'; }
-  });
+      <div class="route-cols">
+        ${timetable}
+        <div class="route-col"></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 /* =========================================================
@@ -511,20 +573,26 @@ function setupPick(){
    送出 / 重置 / 整體刷新
    ========================================================= */
 let currentRoutes=[];
-function refresh(){
+async function refresh(){
   currentRoutes=computeRoutes(demands);
+  document.getElementById('routes').innerHTML='<p style="padding:16px;color:#64748b">路線規劃中（計算真實道路與抵達時間）…</p>';
+  await enrichRoutes(currentRoutes);
   renderStats(currentRoutes);
   renderBase(currentRoutes);
   renderMatrix();
   renderRoutes(currentRoutes);
+  // 路線選單 = 有需求的學校（含人數）
+  const schoolCounts={}; demands.forEach(d=>schoolCounts[d.school]=(schoolCounts[d.school]||0)+1);
   const sel=document.getElementById('route-sel'); const cur=sel.value;
-  sel.innerHTML=`<option value="">全部路線</option>`+currentRoutes.map(r=>`<option value="${r.id}">${r.title}（${r.n}人）</option>`).join('');
+  const opts=Object.entries(schoolCounts).sort((a,b)=>b[1]-a[1])
+    .map(([name,c])=>`<option value="${name}">${name}（${c}人）</option>`).join('');
+  sel.innerHTML=`<option value="">全部路線</option>`+opts;
   if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
-  highlightRoute(sel.value, currentRoutes);
+  onRouteSel(sel.value);
 }
 
 function setupForm(){
-  document.getElementById('route-sel').onchange=e=>highlightRoute(e.target.value, currentRoutes);
+  document.getElementById('route-sel').onchange=e=>onRouteSel(e.target.value);
 
   document.getElementById('f-submit').onclick=async()=>{
     const county=document.getElementById('f-county').value;
@@ -581,7 +649,7 @@ function setOverlayShow(show){ document.getElementById('overlay').style.display=
     initMap(); setupCascade(); setupPick(); setupForm();
     demands=loadDemandsLS();
     if(!demands){ demands=await loadOrBuildSeed(); saveDemands(); }
-    refresh();
+    await refresh();
     setOverlayShow(false);
   }catch(e){
     setOverlay('載入失敗 😥', '請確認 data/villages.json 與 data/highschools.json 存在，且透過 http(s) 開啟（非 file://）。');
