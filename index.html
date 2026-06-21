@@ -83,6 +83,8 @@
   .stop-area{font-size:11.5px; color:var(--muted);}
   .far{color:var(--warn); font-weight:700;}
   .transfer{font-size:12.5px; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:9px; padding:8px 10px; margin:0 0 10px;}
+  .combined{font-size:12.5px; background:#f5f3ff; border:1px solid #ddd6fe; color:#5b21b6; border-radius:9px; padding:8px 10px; margin:0 0 10px;}
+  .route-card.combined-card{border-left-color:var(--origin);}
 
   footer{max-width:1200px; margin:24px auto 0; padding:0 16px; color:var(--muted); font-size:12.5px;}
   footer a{color:var(--brand);}
@@ -303,46 +305,62 @@ function clusterPoints(items, key, thKm){
 function centroid(items, key){ const n=items.length;
   return {lat:items.reduce((s,m)=>s+key(m).lat,0)/n, lng:items.reduce((s,m)=>s+key(m).lng,0)/n}; }
 
+const MIN_VIABLE=4, ORIGIN_KM=13, PICK_KM=2.5, COMBINE_KM=20;
+
+// 由一組學生組成一條路線物件（combined=true 表示沿途多站下車的合併共乘線）
+function buildRoute(members, combined){
+  const n=members.length;
+  const oC=centroid(members, m=>({lat:m.lat,lng:m.lng}));
+  const destC=centroid(members, m=>({lat:m.schoolLat,lng:m.schoolLng}));
+  // 下車學校；合併線依「離居住地近→遠」排序（先經過的先下車），單一目的地則依人數
+  const dropMap={};
+  members.forEach(m=>{ (dropMap[m.school]=dropMap[m.school]||{name:m.school, county:m.schoolCounty, lat:m.schoolLat, lng:m.schoolLng, count:0}).count++; });
+  let dropoffs=Object.values(dropMap);
+  if(combined) dropoffs.sort((a,b)=> haversine(oC,a)-haversine(oC,b));
+  else dropoffs.sort((a,b)=> b.count-a.count);
+  const firstDrop=dropoffs[0];
+  // 上車聚落：居住點 2.5km 聚合，依「離第一個下車點遠→近」排序（沿途收人）
+  const pickClusters=clusterPoints(members, m=>({lat:m.lat,lng:m.lng}), PICK_KM);
+  const pickups=pickClusters.map(pc=>{
+    const c=centroid(pc.members, m=>({lat:m.lat,lng:m.lng}));
+    const nameCount={};
+    pc.members.forEach(m=>{ const nm=`${m.resTown}${m.resVillage}`; nameCount[nm]=(nameCount[nm]||0)+1; });
+    const label=Object.entries(nameCount).sort((a,b)=>b[1]-a[1])[0][0];
+    const county=pc.members[0].resCounty;
+    const maxFar=Math.max(...pc.members.map(m=>haversine({lat:m.lat,lng:m.lng}, c)));
+    return {label, county, lat:c.lat, lng:c.lng, count:pc.members.length, maxFar};
+  }).sort((a,b)=> haversine({lat:b.lat,lng:b.lng},firstDrop) - haversine({lat:a.lat,lng:a.lng},firstDrop));
+  const townsU=[...new Set(members.map(m=>m.resTown))];
+  const originCounties=[...new Set(members.map(m=>m.resCounty))];
+  const destCounties=[...new Set(dropoffs.map(d=>d.county))];
+  const targetArriveMin=Math.min(...members.map(m=>hm2min(m.arrive)));
+  let tier,advice,vehicle;
+  if(n>=20){ tier='big'; vehicle='大型校車（約45人座）'; advice='建議開設跨縣市大型校車專線'; }
+  else if(n>=8){ tier='mid'; vehicle='中型巴士（約25人座）'; advice='建議開設跨縣市中型巴士專線'; }
+  else if(n>=4){ tier='small'; vehicle='9人座幸福巴士共乘'; advice=combined?'偏鄉低密度需求合併共乘，沿途分段下車':'建議媒合幸福巴士跨縣市共乘'; }
+  else { tier='wait'; vehicle='—'; advice='需求待累積中（暫無法合併）'; }
+  const title = combined
+    ? `${townsU.slice(0,2).join('、')}${townsU.length>2?'等':''} → ${destCounties.join('→')}（沿途下車）`
+    : `${townsU.slice(0,3).join('、')}${townsU.length>3?'等':''} → ${destCounties[0]}`;
+  return {id:`r${Math.round(oC.lat*100)}_${Math.round(oC.lng*100)}_${Math.round(destC.lat*100)}_${combined?'c':'s'}`,
+    combined:!!combined, destCounty:destCounties[0], destCounties, destC, oC, n,
+    pickups, dropoffs, tier, advice, vehicle, originCounties, targetArriveMin, title};
+}
+
 function computeRoutes(items){
-  const ORIGIN_KM=13, PICK_KM=2.5;
-  // 先以學校座標 5km 聚合成「目的地群」
+  // 第一階段：以目的地（學校 5km）→ 居住走廊（13km）切出單一目的地路線
   const destClusters=clusterPoints(items, d=>({lat:d.schoolLat,lng:d.schoolLng}), 5);
-  const routes=[];
+  const routes=[]; const leftover=[];
   destClusters.forEach(dc=>{
-    const destC=centroid(dc.members, m=>({lat:m.schoolLat,lng:m.schoolLng}));
-    const destCounty=dc.members[0].schoolCounty;
-    // 同一目的地內，再依居住地 13km 切成各自合理的車線
-    const originClusters=clusterPoints(dc.members, m=>({lat:m.lat,lng:m.lng}), ORIGIN_KM);
-    originClusters.forEach(oc=>{
-      const members=oc.members, n=members.length;
-      // 下車學校
-      const dropMap={};
-      members.forEach(m=>{ (dropMap[m.school]=dropMap[m.school]||{name:m.school, lat:m.schoolLat, lng:m.schoolLng, count:0}).count++; });
-      const dropoffs=Object.values(dropMap).sort((a,b)=>b.count-a.count);
-      // 上車聚落：居住點 2.5km 聚合
-      const pickClusters=clusterPoints(members, m=>({lat:m.lat,lng:m.lng}), PICK_KM);
-      const pickups=pickClusters.map(pc=>{
-        const c=centroid(pc.members, m=>({lat:m.lat,lng:m.lng}));
-        const nameCount={};
-        pc.members.forEach(m=>{ const nm=`${m.resTown}${m.resVillage}`; nameCount[nm]=(nameCount[nm]||0)+1; });
-        const label=Object.entries(nameCount).sort((a,b)=>b[1]-a[1])[0][0];
-        const county=pc.members[0].resCounty;
-        const maxFar=Math.max(...pc.members.map(m=>haversine({lat:m.lat,lng:m.lng}, c)));
-        return {label, county, lat:c.lat, lng:c.lng, count:pc.members.length, maxFar};
-      }).sort((a,b)=> haversine({lat:b.lat,lng:b.lng},destC) - haversine({lat:a.lat,lng:a.lng},destC)); // 遠→近
-      const townsU=[...new Set(members.map(m=>m.resTown))];
-      let tier,advice,vehicle;
-      if(n>=20){ tier='big'; vehicle='大型校車（約45人座）'; advice='建議開設跨縣市大型校車專線'; }
-      else if(n>=8){ tier='mid'; vehicle='中型巴士（約25人座）'; advice='建議開設跨縣市中型巴士專線'; }
-      else if(n>=4){ tier='small'; vehicle='9人座幸福巴士共乘'; advice='建議媒合幸福巴士跨縣市共乘'; }
-      else { tier='wait'; vehicle='—'; advice='需求待累積中'; }
-      const oC=centroid(members, m=>({lat:m.lat,lng:m.lng}));
-      const originCounties=[...new Set(members.map(m=>m.resCounty))];
-      const targetArriveMin=Math.min(...members.map(m=>hm2min(m.arrive)));
-      routes.push({id:`r${Math.round(oC.lat*100)}_${Math.round(oC.lng*100)}_${Math.round(destC.lat*100)}`,
-        destCounty, destC, n, pickups, dropoffs, tier, advice, vehicle, originCounties, targetArriveMin,
-        title:`${townsU.slice(0,3).join('、')}${townsU.length>3?'等':''} → ${destCounty}`});
+    clusterPoints(dc.members, m=>({lat:m.lat,lng:m.lng}), ORIGIN_KM).forEach(oc=>{
+      if(oc.members.length>=MIN_VIABLE) routes.push(buildRoute(oc.members, false));
+      else leftover.push(...oc.members);   // 無法獨立成線者，留待合併
     });
+  });
+  // 第二階段：把無法成線者依「居住地相近」合併；達門檻者成為沿途分段下車的合併共乘線
+  clusterPoints(leftover, m=>({lat:m.lat,lng:m.lng}), COMBINE_KM).forEach(oc=>{
+    const multiDest=new Set(oc.members.map(m=>m.school)).size>1;
+    routes.push(buildRoute(oc.members, oc.members.length>=MIN_VIABLE && multiDest));
   });
   return routes.sort((a,b)=>b.n-a.n);
 }
@@ -365,22 +383,37 @@ function initMap(){
   baseLayer=L.layerGroup().addTo(map);
   routeLayer=L.layerGroup().addTo(map);
 }
-function renderBase(routes){
+function renderBase(routes, activeSchool){
   baseLayer.clearLayers();
-  // 學校
+  // 學校（選了某校時，其他校變灰）
   const usedSchools={};
   demands.forEach(d=>{ if(!usedSchools[d.school]){ usedSchools[d.school]=1;
-    L.marker([d.schoolLat,d.schoolLng],{icon:L.divIcon({className:'',html:`<div class="school-pin">⭐</div>`,iconSize:[24,24],iconAnchor:[12,12]})})
+    const dim=activeSchool && d.school!==activeSchool;
+    L.marker([d.schoolLat,d.schoolLng],{icon:L.divIcon({className:'',
+      html:`<div class="school-pin" style="${dim?'opacity:.3;filter:grayscale(1)':''}">⭐</div>`,iconSize:[24,24],iconAnchor:[12,12]})})
       .addTo(baseLayer).bindPopup(`<b>⭐ ${d.school}</b><br>${d.schoolCounty}`);
   }});
-  // 上車聚落（所有路線的）
-  routes.forEach(r=> r.pickups.forEach(p=>{
-    const size=Math.max(26,Math.min(48,22+p.count*2.2));
-    L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',
-      html:`<div class="cluster-badge" style="width:${size}px;height:${size}px;background:var(--origin);font-size:${size>40?15:13}px">${p.count}</div>`,
-      iconSize:[size,size],iconAnchor:[size/2,size/2]})})
-      .addTo(baseLayer).bindPopup(`<b>${p.county}${p.label}</b>（${p.count} 人）<br>🚏 集合上車點<br>家到集合點最遠約 ${p.maxFar.toFixed(1)} km`);
-  }));
+  // 上車聚落：與所選學校相關者保持紫色，無關者變灰（且不蓋過相關點）
+  const activeKeys=new Set();
+  if(activeSchool){
+    routes.forEach(r=>{ if(r.dropoffs.some(d=>d.name===activeSchool))
+      r.pickups.forEach(p=>activeKeys.add(p.lat.toFixed(4)+','+p.lng.toFixed(4))); });
+  }
+  const drawn=new Set();
+  routes.forEach(r=>{
+    const serves = !activeSchool || r.dropoffs.some(d=>d.name===activeSchool);
+    r.pickups.forEach(p=>{
+      const key=p.lat.toFixed(4)+','+p.lng.toFixed(4);
+      if(!serves && activeKeys.has(key)) return;       // 已由相關路線畫紫色，略過
+      if(drawn.has(key+(serves?'a':'g'))) return; drawn.add(key+(serves?'a':'g'));
+      const color = serves ? 'var(--origin)' : '#cbd5e1';
+      const size=Math.max(26,Math.min(48,22+p.count*2.2));
+      L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',
+        html:`<div class="cluster-badge" style="width:${size}px;height:${size}px;background:${color};font-size:${size>40?15:13}px;${serves?'':'opacity:.85'}">${p.count}</div>`,
+        iconSize:[size,size],iconAnchor:[size/2,size/2]})})
+        .addTo(baseLayer).bindPopup(`<b>${p.county}${p.label}</b>（${p.count} 人）<br>🚏 集合上車點<br>家到集合點最遠約 ${p.maxFar.toFixed(1)} km`);
+    });
+  });
 }
 // 為每條路線計算真實道路（OSRM）：幾何、里程、時間、到校時刻表、是否需轉乘
 async function enrichRoutes(routes){
@@ -388,7 +421,7 @@ async function enrichRoutes(routes){
     const way=[...r.pickups.map(p=>({lat:p.lat,lng:p.lng})), ...r.dropoffs.map(d=>({lat:d.lat,lng:d.lng}))];
     const data=await osrmRoute(way);
     r.osrm=data;
-    const span=new Set([...r.originCounties, r.destCounty]).size;
+    const span=new Set([...r.originCounties, ...(r.destCounties||[r.destCounty])]).size;
     r.countySpan=span;
     if(data){
       r.distanceKm=data.distance/1000;
@@ -400,6 +433,8 @@ async function enrichRoutes(routes){
       r.departTime=min2hm(departMin);
       r.schoolArrive=min2hm(r.targetArriveMin);
       r.timetable=r.pickups.map((p,i)=>({label:`${p.county}${p.label}`, time:min2hm(departMin+(cum[i]||0)/60)}));
+      // 各下車點的抵達時刻（合併線會有多個、依序遞增）
+      r.dropTimes=r.dropoffs.map((d,j)=>({name:d.name, county:d.county, count:d.count, time:min2hm(departMin+(cum[firstDropIdx+j]||0)/60)}));
       // 轉乘：跨 ≥3 縣市，或全程 >50km
       r.needsTransfer=(r.distanceKm>50)||span>=3;
       if(r.needsTransfer && data.geometry && data.geometry.coordinates && data.geometry.coordinates.length){
@@ -432,6 +467,12 @@ function drawRoutes(routes, fit){
         iconSize:[24,24],iconAnchor:[12,12]})})
         .addTo(routeLayer).bindPopup(`上車 ${i+1}：<b>${p.county}${p.label}</b>　${p.count} 人${r.timetable?`<br>🕐 ${r.timetable[i].time} 發車`:''}`);
     });
+    // 下車點（合併線會有多個，依序顯示抵達時刻）
+    r.dropoffs.forEach((d,j)=>{
+      L.marker([d.lat,d.lng],{icon:L.divIcon({className:'',
+        html:`<div class="cluster-badge" style="width:22px;height:22px;background:${color};font-size:11px;border-radius:7px">下</div>`,iconSize:[22,22],iconAnchor:[11,11]})})
+        .addTo(routeLayer).bindPopup(`下車 ${j+1}：<b>${d.name}</b>（${d.county}）${d.count} 人${r.dropTimes?`<br>🕐 ${r.dropTimes[j].time} 抵達`:''}`);
+    });
     if(r.transfer){
       L.marker([r.transfer.lat,r.transfer.lng],{icon:L.divIcon({className:'',
         html:`<div style="font-size:22px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🔄</div>`,iconSize:[26,26],iconAnchor:[13,13]})})
@@ -444,6 +485,7 @@ function drawRoutes(routes, fit){
 
 // 路線選單：依「有需求的學校」選 → 高亮服務該校的路線
 function onRouteSel(val){
+  renderBase(currentRoutes, val||null);   // 重新著色：無關上車點變灰
   if(!val){ drawRoutes(currentRoutes, false); return; }
   const rs=currentRoutes.filter(r=>r.dropoffs.some(d=>d.name===val));
   drawRoutes(rs, true);
@@ -487,21 +529,28 @@ function renderRoutes(routes){
     const meta = (r.distanceKm!=null)
       ? `🛣️ 全程約 ${r.distanceKm.toFixed(1)} km・約 ${Math.round(r.durationMin)} 分鐘（依真實道路）`
       : '（道路里程暫不可用，下方為直線估計）';
+    const combinedNote = r.combined
+      ? `<div class="combined">🔁 <b>合併共乘線</b>：整合鄰近偏鄉、前往不同縣市的零星需求一同出發，<b>先經過的縣市先下車</b>，再續往下一站。</div>`
+      : '';
     const transfer = r.needsTransfer
       ? `<div class="transfer">🔄 <b>建議分段轉乘</b>：本線跨越 ${r.countySpan} 個縣市${r.distanceKm!=null?`、全程約 ${r.distanceKm.toFixed(0)} km`:''}，建議學生先由社區接駁至中繼轉乘點，再搭幹線車前往學校（地圖上 🔄 為建議轉乘位置）。</div>`
       : '';
-    const timetable = r.timetable
-      ? `<div class="route-col"><h4>🕐 預計時刻表（目標到校 ${r.schoolArrive}）</h4>
-           <ol>${r.timetable.map(t=>`<li>${t.time}　${t.label} 上車</li>`).join('')}
-           <li><b>${r.schoolArrive}　抵達 ${r.dropoffs[0].name}（下車）</b></li></ol></div>`
+    const dropList = r.dropoffs.map((d,j)=>
+      `<li>${r.combined?`<b>第${j+1}站</b> `:''}${d.name}（${d.county}）<b>${d.count}</b> 人${r.dropTimes?` <span class="stop-area">🕐 ${r.dropTimes[j].time} 抵達</span>`:''}</li>`).join('');
+    const schedule = r.timetable
+      ? `<div class="route-col"><h4>🕐 預計時刻表</h4><ol>
+           ${r.timetable.map(t=>`<li>${t.time}　${t.label} <span class="stop-area">上車</span></li>`).join('')}
+           ${(r.dropTimes||[]).map((d,j)=>`<li><b>${d.time}　抵達 ${d.name}（下車${r.combined?`・第${j+1}站`:''}）</b></li>`).join('')}
+         </ol></div>`
       : `<div class="route-col"><h4>🕐 預計時刻表</h4><p class="stop-area">道路時間暫不可用</p></div>`;
-    return `<div class="route-card ${r.tier}">
+    return `<div class="route-card ${r.tier}${r.combined?' combined-card':''}">
       <div class="route-head">
         <span class="route-title">${r.title} 線</span>
         <span class="badge ${r.tier}">${r.vehicle}</span>
       </div>
       <div class="route-sub">共 ${r.n} 名學生 ｜ ${r.advice}</div>
       <div class="route-meta">${meta}</div>
+      ${combinedNote}
       ${transfer}
       <div class="route-cols">
         <div class="route-col">
@@ -509,12 +558,12 @@ function renderRoutes(routes){
           <ol>${r.pickups.map(p=>`<li>${p.county}${p.label} <b>${p.count}</b> 人${p.maxFar>1.5?` <span class="far">⚠️家距 ${p.maxFar.toFixed(1)}km</span>`:''}</li>`).join('')}</ol>
         </div>
         <div class="route-col">
-          <h4>🏫 下車點</h4>
-          <ul>${r.dropoffs.map(d=>`<li>${d.name} <b>${d.count}</b> 人</li>`).join('')}</ul>
+          <h4>🏫 下車點${r.combined?'（依序）':''}</h4>
+          <ol>${dropList}</ol>
         </div>
       </div>
       <div class="route-cols">
-        ${timetable}
+        ${schedule}
         <div class="route-col"></div>
       </div>
     </div>`;

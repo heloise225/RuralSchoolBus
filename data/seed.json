@@ -95,8 +95,8 @@
   "resCounty": "雲林縣",
   "resTown": "虎尾鎮",
   "resVillage": "新興里",
-  "lat": 23.70676,
-  "lng": 120.44067,
+  "lat": 23.70762,
+  "lng": 120.45099,
   "school": "國立嘉義高工",
   "schoolCounty": "嘉義市",
   "schoolLat": 23.47159,
@@ -275,6 +275,32 @@
  {
   "id": 22,
   "resCounty": "南投縣",
+  "resTown": "信義鄉",
+  "resVillage": "人和村",
+  "lat": 23.6868,
+  "lng": 120.84625,
+  "school": "國立嘉義高中",
+  "schoolCounty": "嘉義市",
+  "schoolLat": 23.47836,
+  "schoolLng": 120.46469,
+  "arrive": "07:40"
+ },
+ {
+  "id": 23,
+  "resCounty": "南投縣",
+  "resTown": "信義鄉",
+  "resVillage": "地利村",
+  "lat": 23.6918,
+  "lng": 120.85825,
+  "school": "國立華南高商",
+  "schoolCounty": "嘉義市",
+  "schoolLat": 23.47855,
+  "schoolLng": 120.45927,
+  "arrive": "07:20"
+ },
+ {
+  "id": 24,
+  "resCounty": "南投縣",
   "resTown": "草屯鎮",
   "resVillage": "玉峰里",
   "lat": 23.98337,
@@ -283,10 +309,10 @@
   "schoolCounty": "彰化縣",
   "schoolLat": 24.08094,
   "schoolLng": 120.54412,
-  "arrive": "07:40"
+  "arrive": "07:00"
  },
  {
-  "id": 23,
+  "id": 25,
   "resCounty": "南投縣",
   "resTown": "草屯鎮",
   "resVillage": "炎峰里",
@@ -296,10 +322,10 @@
   "schoolCounty": "彰化縣",
   "schoolLat": 24.07376,
   "schoolLng": 120.54858,
-  "arrive": "07:20"
+  "arrive": "07:00"
  },
  {
-  "id": 24,
+  "id": 26,
   "resCounty": "南投縣",
   "resTown": "草屯鎮",
   "resVillage": "和平里",
@@ -309,10 +335,10 @@
   "schoolCounty": "彰化縣",
   "schoolLat": 24.07316,
   "schoolLng": 120.55144,
-  "arrive": "07:00"
+  "arrive": "07:20"
  },
  {
-  "id": 25,
+  "id": 27,
   "resCounty": "南投縣",
   "resTown": "南投市",
   "resVillage": "龍泉里",
@@ -322,10 +348,10 @@
   "schoolCounty": "彰化縣",
   "schoolLat": 24.08094,
   "schoolLng": 120.54412,
-  "arrive": "07:00"
+  "arrive": "07:20"
  },
  {
-  "id": 26,
+  "id": 28,
   "resCounty": "南投縣",
   "resTown": "南投市",
   "resVillage": "康壽里",
@@ -335,10 +361,10 @@
   "schoolCounty": "彰化縣",
   "schoolLat": 24.07376,
   "schoolLng": 120.54858,
-  "arrive": "07:20"
+  "arrive": "07:40"
  },
  {
-  "id": 27,
+  "id": 29,
   "resCounty": "南投縣",
   "resTown": "南投市",
   "resVillage": "三民里",
@@ -351,68 +377,94 @@
   "arrive": "07:20"
  },
  {
-  "id": 28,
+  "id": 30,
   "resCounty": "雲林縣",
   "resTown": "西螺鎮",
   "resVillage": "振興里",
-  "lat": 23.78798,
+  "lat": 23.79798,
   "lng": 120.46201,
   "school": "市立臺中一中",
   "schoolCounty": "臺中市",
   "schoolLat": 24.15031,
   "schoolLng": 120.68656,
-  "arrive": "07:40"
- },
- {
-  "id": 29,
-  "resCounty": "雲林縣",
-  "resTown": "西螺鎮",
-  "resVillage": "大園里",
-  "lat": 23.79298,
-  "lng": 120.47001,
-  "school": "市立臺中二中",
-  "schoolCounty": "臺中市",
-  "schoolLat": 24.15347,
-  "schoolLng": 120.67448,
-  "arrive": "07:20"
- },
- {
-  "id": 30,
-  "resCounty": "雲林縣",
-  "resTown": "西螺鎮",
-  "resVillage": "廣福里",
-  "lat": 23.79798,
-  "lng": 120.46201,
-  "school": "市立臺中女中",
-  "schoolCounty": "臺中市",
-  "schoolLat": 24.13611,
-  "schoolLng": 120.67723,
   "arrive": "07:00"
  },
  {
   "id": 31,
   "resCounty": "雲林縣",
   "resTown": "西螺鎮",
-  "resVillage": "正興里",
+  "resVillage": "大園里",
   "lat": 23.80298,
-  "lng": 120.47001,
-  "school": "市立臺中一中",
+  "lng": 120.47401,
+  "school": "市立臺中二中",
   "schoolCounty": "臺中市",
-  "schoolLat": 24.15031,
-  "schoolLng": 120.68656,
+  "schoolLat": 24.15347,
+  "schoolLng": 120.67448,
   "arrive": "07:00"
  },
  {
   "id": 32,
   "resCounty": "雲林縣",
   "resTown": "西螺鎮",
-  "resVillage": "永安里",
+  "resVillage": "廣福里",
   "lat": 23.80798,
-  "lng": 120.46201,
+  "lng": 120.46601,
+  "school": "市立臺中女中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.13611,
+  "schoolLng": 120.67723,
+  "arrive": "07:20"
+ },
+ {
+  "id": 33,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "正興里",
+  "lat": 23.78798,
+  "lng": 120.45801,
+  "school": "市立臺中一中",
+  "schoolCounty": "臺中市",
+  "schoolLat": 24.15031,
+  "schoolLng": 120.68656,
+  "arrive": "07:20"
+ },
+ {
+  "id": 34,
+  "resCounty": "雲林縣",
+  "resTown": "西螺鎮",
+  "resVillage": "永安里",
+  "lat": 23.79298,
+  "lng": 120.47001,
   "school": "市立臺中二中",
   "schoolCounty": "臺中市",
   "schoolLat": 24.15347,
   "schoolLng": 120.67448,
+  "arrive": "07:40"
+ },
+ {
+  "id": 35,
+  "resCounty": "南投縣",
+  "resTown": "信義鄉",
+  "resVillage": "人和村",
+  "lat": 23.6968,
+  "lng": 120.85025,
+  "school": "國立斗六高中",
+  "schoolCounty": "雲林縣",
+  "schoolLat": 23.71232,
+  "schoolLng": 120.54556,
   "arrive": "07:20"
+ },
+ {
+  "id": 36,
+  "resCounty": "南投縣",
+  "resTown": "信義鄉",
+  "resVillage": "地利村",
+  "lat": 23.7018,
+  "lng": 120.86225,
+  "school": "國立斗六高中",
+  "schoolCounty": "雲林縣",
+  "schoolLat": 23.71232,
+  "schoolLng": 120.54556,
+  "arrive": "07:00"
  }
 ]
