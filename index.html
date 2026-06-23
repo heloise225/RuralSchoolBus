@@ -228,7 +228,7 @@
     <div class="hero-card">
       <h1>跨縣市通學需求媒合平台</h1>
       <p class="tagline">交通平權・教育平權｜把散落各村里的「跨縣市通學需求」聚合成「可調派的真實校車路線」</p>
-      <p class="sub">涵蓋非六都重點縣市：<b id="county-list">彰化・南投・雲林・嘉義・花蓮・台東</b>　｜　依居住村里聚合、規劃集合上車點與真實道路路線</p>
+      <p class="sub">涵蓋全台非六都 <b id="county-list">16</b> 縣市　｜　依居住村里聚合、規劃集合上車點與真實道路路線</p>
       <span class="privacy">🔒 去識別化：僅蒐集「居住村里」與「就讀學校」，不蒐集姓名等個人資料</span>
     </div>
   </div>
@@ -937,7 +937,7 @@ function setOverlayShow(show){ document.getElementById('overlay').style.display=
     setOverlay('載入行政區與學校資料…');
     await loadData();
     // 更新頁首縣市清單
-    document.getElementById('county-list').textContent=Object.keys(VILLAGES).join('・');
+    document.getElementById('county-list').textContent=Object.keys(VILLAGES).length;
     initMap(); setupCascade(); setupPick(); setupForm();
     demands=loadDemandsLS();
     if(!demands){ demands=await loadOrBuildSeed(); saveDemands(); }
